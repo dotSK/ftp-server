@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "ftp_utils.h": "c",
+        "stdlib.h": "c",
+        "data_worker.h": "c"
+    },
+    "editor.tabSize": 2,
+    "editor.detectIndentation": false
+}

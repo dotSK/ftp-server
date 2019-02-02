@@ -1,0 +1,30 @@
+{
+	"folders": [
+		{
+			"path": "zad_D(ftp)"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"ftp_utils.h": "c",
+			"stdlib.h": "c",
+			"data_worker.h": "c",
+			"netdb.h": "c",
+			"types.h": "c",
+			"socket.h": "c",
+			"unistd.h": "c",
+			"stdio.h": "c",
+			"stat.h": "c",
+			"ctype.h": "c",
+			"signal.h": "c",
+			"errno.h": "c",
+			"limits.h": "c",
+			"climits": "c",
+			"aio.h": "c",
+			"libaio.h": "c"
+		},
+		"C_Cpp.default.cStandard": "c99",
+		"C_Cpp.default.intelliSenseMode": "gcc-x64",
+		"C_Cpp.clang_format_path": "/usr/bin/clang-format"
+	}
+}
