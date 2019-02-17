@@ -1,117 +1,104 @@
 #include "ftp_utils.h"
 
-int change_path(const char *new_dir, char **buf, int *buf_size,
-                struct dir_info *dirinfo) {
-  int new_indice = 0;
-  int new_dir_len = strlen(new_dir);
-  int c_dir_len = strlen(dirinfo->c_dir);
-  int dot_occured = 0;
-  char *temp = 0;
-  int base_indice = 0;
-  struct stat statbuf;
+void strbuf_free(StrBuf *buf) {
+  free(buf->ptr);
+  buf->size = 0;
+  buf->len = 0;
+}
 
-  if (*buf_size == 0) {
-    *buf = malloc(100 * sizeof(char));
-    if (*buf == NULL) {
-      fputs("failed to allocate memory for temp_dir buffer", stderr);
-      exit(1);
-    }
-    *buf_size = 100;
-  }
-
-  if (*buf_size < c_dir_len + new_dir_len) {
-    temp = realloc(*buf,
-                   ((2 * *buf_size) + c_dir_len + new_dir_len) * sizeof(char));
-    if (temp == NULL) {
-      fputs("failed to allocate more memory for temp_dir buffer", stderr);
-      exit(1);
-    }
-    *buf = temp;
-  }
-
-  strncpy(*buf, dirinfo->c_dir, *buf_size);
-
-  if (*new_dir == '/') {
-    base_indice = dirinfo->base_dir_len;
-    if ((*buf)[dirinfo->base_dir_len] == '/') {
-      (*buf)[dirinfo->base_dir_len] = '\0';
-    }
-  } else if (c_dir_len - 1 >= 0 && c_dir_len + 1 < dirinfo->c_dir_size) {
-    if ((*buf)[c_dir_len - 1] != '/') {
-      (*buf)[c_dir_len++] = '/';
-      (*buf)[c_dir_len] = '\0';
-    }
-    base_indice = c_dir_len;
-  }
-
-  while (new_indice < new_dir_len) {
-    char curr_char = new_dir[new_indice];
-    if (curr_char == '.') {
-      if (dot_occured) {
-        base_indice = rollback_dir(*buf, dirinfo->base_dir_len);
-        dot_occured = 0;
+/**
+ * Tries to reallocate buf if smaller than size,
+ * or if it fails, tries to allocate new buffer using malloc.
+ */
+int try_size_change(StrBuf *restrict buf, const size_t size) {
+  if (buf->size < size) {
+    char *tmp = NULL;
+    if ((tmp = realloc(buf, size)) == NULL) {
+      if ((tmp = malloc(size)) == NULL) {
+        return 0;
       } else {
-        dot_occured = 1;
-      }
-    } else if (curr_char == '/') {
-      if (dot_occured) {
-        dot_occured = 0;
-      } else {
-        (*buf)[base_indice++] = '/';
+        strbuf_free(buf);
+        buf->ptr = tmp;
+        buf->size = size;
+        return 1;
       }
     } else {
-      if (dot_occured) {
-        (*buf)[base_indice++] = '.';
-        dot_occured = 0;
-      }
-      (*buf)[base_indice++] = curr_char;
-    }
-    new_indice++;
-  }
-  if (base_indice - 1 >= 0) {
-    (*buf)[base_indice - 1] == '/' ? --base_indice : base_indice;
-  }
-  (*buf)[base_indice] = '\0';
-
-  if (stat(*buf, &statbuf) == 0) {
-    if (S_ISDIR(statbuf.st_mode)) {
-      while (strlen(*buf) > dirinfo->c_dir_size) {
-        temp = realloc(dirinfo->c_dir, dirinfo->c_dir_size * 2 * sizeof(char));
-        if (temp == NULL) {
-          fputs(
-              "failed to allocate bigger buffer for current directory storage",
-              stderr);
-          return -3;
-        }
-        dirinfo->c_dir_size *= 2;
-      }
-      return 1; // file exists and is a directory
-    } else if (S_ISREG(statbuf.st_mode)) {
-      return 2; // file exists and is a regular file
-    } else {
-      return -2; // file exists but is a special file
+      buf->size = size;
+      return 1;
     }
   } else {
-    return -1; // file does not exist
+    return 1;
   }
 }
 
-int rollback_dir(char *c_dir, int base_len) {
-  int done = 0;
-  int dir_len = strlen(c_dir);
-  int curr_indice = dir_len;
+/**
+ * Checks if path is confined to a given starting folder.
+ *
+ * Return values:
+ *    *ptr if path is valid
+ *    NULL if path is invalid or there was an allocation error
+ */
+char *validate_path(const StrBuf *restrict new_path,
+                    const StrBuf *restrict curr_path,
+                    StrBuf *restrict path_buf) {
+  size_t desired_size = 0;
+  char *canonical_path = NULL;
 
-  while (!(done && c_dir[curr_indice] == '/') && curr_indice > base_len) {
-    if (c_dir[curr_indice] == '/') {
-      done = 1;
+  if (new_path->len > 0 && new_path->ptr[0] == '/') {
+    desired_size = cwd.len + new_path->len + 1;
+    if (try_size_change(path_buf, desired_size)) {
+      memcpy(path_buf->ptr, cwd.ptr, cwd.len);
+      memcpy(path_buf->ptr + cwd.len, new_path->ptr, new_path->len + 1);
+    } else {
+      return NULL;
     }
-    curr_indice--;
+  } else {
+    desired_size = cwd.len + curr_path->len + new_path->len + 1;
+    if (try_size_change(path_buf, desired_size)) {
+      memcpy(path_buf->ptr, cwd.ptr, cwd.len);
+      memcpy(path_buf->ptr + cwd.len, curr_path->ptr, curr_path->len);
+      memcpy(path_buf->ptr + cwd.len + curr_path->len, new_path->ptr,
+             new_path->len + 1);
+    } else {
+      return NULL;
+    }
   }
-  c_dir[curr_indice] = '\0';
-  return curr_indice;
+
+  // TODO: GNUism
+  canonical_path = canonicalize_file_name(path_buf->ptr);
+  if (canonical_path != NULL) {
+    if (!path_confined(canonical_path)) {
+      free(canonical_path);
+      canonical_path = NULL;
+    }
+  }
+  return canonical_path;
 }
 
-int ftp_send_binary(const int sockfd, const char *bytestream, const int size) {
+/**
+ * Checks if given path is nested inside given directory
+ */
+static int path_confined(const char *restrict path) {
+  size_t path_len = strlen(path);
+  if (path_len < cwd.len) {
+    return 0;
+  } else {
+    return strncmp(cwd.ptr, path, cwd.len) == 0;
+  }
+}
+
+int is_valid_dir(const char *path) {
+  struct stat result;
+
+  if (lstat(path, &result) != 0) {
+    return 0;
+  } else {
+    return S_ISDIR(result.st_mode);
+  }
+}
+
+static int ftp_send_binary(const int sockfd, const char *bytestream,
+                           const int size) {
   int sent_len = 0, temp_ret = 0;
 
   while (sent_len < size) {

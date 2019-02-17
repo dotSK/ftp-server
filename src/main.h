@@ -1,16 +1,18 @@
 #ifndef FTP_SERVER
 #define FTP_SERVER
 #define _POSIX_SOURCE
+#define _GNU_SOURCE
+#include "data_worker.h"
 #include "ftp_functions.h"
 #include "ftp_utils.h"
-#include "data_worker.h"
 #include <assert.h>
 #include <bits/sigaction.h>
 #include <errno.h>
+#include <linux/limits.h>
 #include <signal.h>
+#include <sys/epoll.h>
 #include <threads.h>
 #include <unistd.h>
-#include <sys/epoll.h>
 
 #define send_status(NUM, MSG) ftp_sendline(sock_fd, #NUM MSG)
 
@@ -41,17 +43,10 @@ enum FtpOp {
   Quit
 };
 
-static const int STATUS_MALLOC_ERR = -10;
-static const int STATUS_SOCKET_FAIL = -9;
-
 static const int BACKLOG = 10;
-static const int BUF_SIZE = 255;
 static const int PORT_NUM = 4785;
-static const int INIT_CWD_SIZE = 50;
-static const int INIT_THRD_POOL_SIZE = 10;
 
-char *cwd = NULL;
-int cwd_len = 0;
+StrBuf cwd = {.buf = NULL, .size = 0, .len = 0};
 
 static void *client_handler(void *socket_file_descriptor);
 static void *ftp_data_worker(void *worker_data_struct);

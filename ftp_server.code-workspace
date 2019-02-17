@@ -21,7 +21,8 @@
 			"limits.h": "c",
 			"climits": "c",
 			"aio.h": "c",
-			"libaio.h": "c"
+			"libaio.h": "c",
+			"ftp_functions.h": "c"
 		},
 		"C_Cpp.default.cStandard": "c11",
 		"C_Cpp.default.intelliSenseMode": "gcc-x64",

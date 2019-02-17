@@ -1,12 +1,10 @@
 #include "main.h"
 
 static int end_of_server = 0;
-
 static struct addrinfo *server_addr;
 
 int main(int argc, char *argv[]) {
   int sfd = 0;
-  int temp_size = INIT_CWD_SIZE;
   struct sigaction sigint_handler;
 
   // set signal handler for SIGINT
@@ -17,22 +15,10 @@ int main(int argc, char *argv[]) {
     pthread_exit(NULL);
   }
 
-  // get cwd
-  do {
-    if (cwd != NULL) free(cwd);
-    cwd = malloc(temp_size * sizeof(char));
-    if (cwd == NULL) {
-      fputs("cannot allocate memory for cwd buffer, exiting...", stderr);
-      exit(STATUS_MALLOC_ERR);
-    }
-    if (getcwd(cwd, temp_size) == NULL) {
-      assert(errno != EINVAL);
-      perror("getcwd");
-      exit(-1);
-    }
-    cwd_len = temp_size;
-    temp_size *= 2;
-  } while (errno == ERANGE);
+  // TODO: GNUism
+  cwd.ptr = get_current_dir_name();
+  cwd.len = strlen(cwd.ptr);
+  cwd.size = cwd.len + 1;
 
   // print some informations
   fprintf(stdout, "listening on port: %d\n", PORT_NUM);
@@ -49,7 +35,7 @@ int main(int argc, char *argv[]) {
     } else {
       fputs("assertion error, this should not happen", stderr);
     }
-    exit(STATUS_SOCKET_FAIL);
+    exit(1);
   } else {
     conn_handler(sfd);
     close(sfd);
@@ -96,43 +82,43 @@ int conn_handler(int sockfd) {
       end_of_server = 1;
     } else {
       switch (fd_events[0].events) {
-        // 
-        case EPOLLERR:
-          fputs("epolerr happened...", stderr);
-          end_of_server = 1;
-          break;
+      //
+      case EPOLLERR:
+        fputs("epolerr happened...", stderr);
+        end_of_server = 1;
+        break;
 
-        // socket closed - connection ended
-        case EPOLLHUP:
-          end_of_server = 1;
-          break;
+      // socket closed - connection ended
+      case EPOLLHUP:
+        end_of_server = 1;
+        break;
 
-        // socket special exception (TODO: maybe handle later?)
-        case EPOLLPRI:
-          fputs("epollpri happened...", stderr);
-          end_of_server = 1;
-          break;
+      // socket special exception (TODO: maybe handle later?)
+      case EPOLLPRI:
+        fputs("epollpri happened...", stderr);
+        end_of_server = 1;
+        break;
 
-        // socket has data ready
-        case EPOLLIN:
-          if (fd_events[0].data.fd == sockfd) {
-            // accept connection
-            if (accept(sockfd, NULL, NULL) >= 0) {
-
-            } else {
-              perror("accept");
-            }
+      // socket has data ready
+      case EPOLLIN:
+        if (fd_events[0].data.fd == sockfd) {
+          // accept connection
+          if (accept(sockfd, NULL, NULL) >= 0) {
 
           } else {
-            // dispatch worker
-
+            perror("accept");
           }
-          break;
 
-        default:
-          fputs("epoll_wait returned non-selected signal, this should not happen", stderr);
-          end_of_server = 1;
-          break;
+        } else {
+          // dispatch worker
+        }
+        break;
+
+      default:
+        fputs("epoll_wait returned non-selected signal, this should not happen",
+              stderr);
+        end_of_server = 1;
+        break;
       }
     }
   }
@@ -146,41 +132,40 @@ int conn_handler(int sockfd) {
       exit(1);
     }
   }
-    if ((temp_sfd = accept(sockfd, NULL, NULL)) == -1) {
-      if (errno == EINTR) {
-        continue;
-      } else {
-        perror("accept");
-        exit(1);
-      }
-    }
-
-    if (drop) {
-      ftp_sendline(
-          temp_sfd,
-          "421 Server run out of thread buffer, please try again later");
-      close(temp_sfd);
+  if ((temp_sfd = accept(sockfd, NULL, NULL)) == -1) {
+    if (errno == EINTR) {
       continue;
     } else {
-      sock_fds[tp_indice] = temp_sfd;
-    }
-
-    if (pthread_create(&thread_pool[tp_indice], NULL, &client_handler,
-                       &sock_fds[tp_indice]) != 0) {
-      perror("pthread_create");
+      perror("accept");
       exit(1);
-    } else {
-      thread_active[tp_indice] = 1;
     }
   }
 
-  // join and end threads
+  if (drop) {
+    ftp_sendline(temp_sfd,
+                 "421 Server run out of thread buffer, please try again later");
+    close(temp_sfd);
+    continue;
+  } else {
+    sock_fds[tp_indice] = temp_sfd;
+  }
 
-  free(sock_fds);
-  free(thread_active);
-  free(thread_pool);
+  if (pthread_create(&thread_pool[tp_indice], NULL, &client_handler,
+                     &sock_fds[tp_indice]) != 0) {
+    perror("pthread_create");
+    exit(1);
+  } else {
+    thread_active[tp_indice] = 1;
+  }
+}
 
-  return 0;
+// join and end threads
+
+free(sock_fds);
+free(thread_active);
+free(thread_pool);
+
+return 0;
 }
 
 static void *client_handler(void *sockfd) {
@@ -297,17 +282,28 @@ void start_session(int sock_fd, char *recv_buf, int buf_size) {
       continue;
     }
 
-    if (!strcmp(*recv_buf, "acct")) ftp_acct(sock_fd);
-    else if (!strcmp(*recv_buf, "cwd")) ftp_cwd(sock_fd, cmd_argument);
-    else if (!strcmp(*recv_buf, "cdup")) ftp_cdup(sock_fd);
-    else if (!strcmp(*recv_buf, "dele")) ftp_dele(sock_fd);
-    else if (!strcmp(*recv_buf, "help")) ftp_help(sock_fd);
-    else if (!strcmp(*recv_buf, "list")) ftp_list(sock_fd);
-    else if (!strcmp(*recv_buf, "mkd") || !strcmp(*recv_buf, "xmkd")) ftp_mkd(sock_fd);
-    else if (!strcmp(*recv_buf, "mode")) ftp_mode(sock_fd);
-    else if (!strcmp(*recv_buf, "mdtm")) ftp_mdtm(sock_fd);
-    else if (!strcmp(*recv_buf, "stor")) ftp_stor(sock_fd);
-    else if (!strcmp(*recv_buf, "pwd")) ftp_pwd(sock_fd);
+    if (!strcmp(*recv_buf, "acct"))
+      ftp_acct(sock_fd);
+    else if (!strcmp(*recv_buf, "cwd"))
+      ftp_cwd(sock_fd, cmd_argument);
+    else if (!strcmp(*recv_buf, "cdup"))
+      ftp_cdup(sock_fd);
+    else if (!strcmp(*recv_buf, "dele"))
+      ftp_dele(sock_fd);
+    else if (!strcmp(*recv_buf, "help"))
+      ftp_help(sock_fd);
+    else if (!strcmp(*recv_buf, "list"))
+      ftp_list(sock_fd);
+    else if (!strcmp(*recv_buf, "mkd") || !strcmp(*recv_buf, "xmkd"))
+      ftp_mkd(sock_fd);
+    else if (!strcmp(*recv_buf, "mode"))
+      ftp_mode(sock_fd);
+    else if (!strcmp(*recv_buf, "mdtm"))
+      ftp_mdtm(sock_fd);
+    else if (!strcmp(*recv_buf, "stor"))
+      ftp_stor(sock_fd);
+    else if (!strcmp(*recv_buf, "pwd"))
+      ftp_pwd(sock_fd);
     else if (!strcmp(*recv_buf, "quit")) {
       ftp_sendline(sock_fd, "221 Goodbye!");
       exit_cond = 1;
@@ -335,11 +331,16 @@ void start_session(int sock_fd, char *recv_buf, int buf_size) {
           conn_defined = 1;
         }
       }
-    } else if (!strcmp(*recv_buf, "retr")) ftp_retr(sock_fd);
-    else if (!strcmp(*recv_buf, "rnfr")) ftp_rnfr(sock_fd);
-    else if (!strcmp(*recv_buf, "rnto")) ftp_rnto(sock_fd);
-    else if (!strcmp(*recv_buf, "rmd")) ftp_rmd(sock_fd);
-    else if (!strcmp(*recv_buf, "size")) ftp_size(sock_fd);
+    } else if (!strcmp(*recv_buf, "retr"))
+      ftp_retr(sock_fd);
+    else if (!strcmp(*recv_buf, "rnfr"))
+      ftp_rnfr(sock_fd);
+    else if (!strcmp(*recv_buf, "rnto"))
+      ftp_rnto(sock_fd);
+    else if (!strcmp(*recv_buf, "rmd"))
+      ftp_rmd(sock_fd);
+    else if (!strcmp(*recv_buf, "size"))
+      ftp_size(sock_fd);
     else if (!strcmp(*recv_buf, "syst")) {
       ftp_sendline(sock_fd, "215 UNIX Type: L8");
     } else if (!strcmp(*recv_buf, "user")) {

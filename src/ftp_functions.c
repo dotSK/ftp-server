@@ -10,28 +10,45 @@ int ftp_acct(const int sock_fd) {
               "Permission already granted in response to PASS and/or USER");
 }
 
-int ftp_cwd(const int sock_fd, const char *params) {
-  int temp = 0;
-  if (*params != '\0') {
-    if ((temp = change_path(arg, &path_buf, &path_buf_size,
-                            &worker_data->dirinfo)) == 1) {
-      strncpy(&worker_data->dirinfo.c_dir[worker_data->dirinfo.base_dir_len],
-              &path_buf[worker_data->dirinfo.base_dir_len],
-              worker_data->dirinfo.c_dir_size -
-                  worker_data->dirinfo.base_dir_len - 1);
-      ftp_sendline(sock_fd, "250 Okay");
-    } else if (temp == -1) {
-      ftp_send_ascii(sock_fd, "550 ");
-      ftp_send_ascii(sock_fd, arg);
-      ftp_sendline(sock_fd, " does not exist");
+void ftp_cwd(const int sock_fd, const StrBuf *restrict param,
+             StrBuf *restrict curr_path, StrBuf *restrict path_buf) {
+  char *new_path = NULL;
+  size_t new_path_len = 0;
+
+  if (*param->ptr != '\0') {
+    new_path = validate_path(param, curr_path, path_buf);
+    if (new_path != NULL && is_valid_dir(new_path)) {
+      new_path_len = strlen(new_path);
+      size_t desired_size = new_path_len - cwd.len + 1;
+      if (try_size_change(curr_path, desired_size)) {
+        memcpy(curr_path->ptr, new_path, new_path_len - cwd.len + 1);
+        free(new_path);
+        send_status(250, "Okay");
+      } else {
+        send_status(451,
+                    "Insufficient memory to process request, try again later");
+      }
     } else {
-      ftp_send_ascii(sock_fd, "550 ");
-      ftp_send_ascii(sock_fd, arg);
-      ftp_sendline(sock_fd, " is not a directory");
+      send_status(550, "Invalid path");
     }
+    // if ((temp = change_path(arg, &path_buf, &path_buf_size,
+    //                         &worker_data->dirinfo)) == 1) {
+    //   strncpy(&worker_data->dirinfo.c_dir[worker_data->dirinfo.base_dir_len],
+    //           &path_buf[worker_data->dirinfo.base_dir_len],
+    //           worker_data->dirinfo.c_dir_size -
+    //               worker_data->dirinfo.base_dir_len - 1);
+    //   ftp_sendline(sock_fd, "250 Okay");
+    // } else if (temp == -1) {
+    //   ftp_send_ascii(sock_fd, "550 ");
+    //   ftp_send_ascii(sock_fd, arg);
+    //   ftp_sendline(sock_fd, " does not exist");
+    // } else {
+    //   ftp_send_ascii(sock_fd, "550 ");
+    //   ftp_send_ascii(sock_fd, arg);
+    //   ftp_sendline(sock_fd, " is not a directory");
+    // }
   } else {
     send_status(504, "Client passed empty parameter");
-    // ftp_sendline(sock_fd, "504 Client passed empty parameter");
   }
 }
 
