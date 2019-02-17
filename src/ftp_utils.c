@@ -31,6 +31,19 @@ int try_size_change(StrBuf *restrict buf, const size_t size) {
   }
 }
 
+int try_path_change(const char *restrict new_path,
+                    const StrBuf *restrict curr_path) {
+  size_t new_path_len = strlen(new_path);
+  size_t desired_size = new_path_len - cwd.len + 1;
+
+  if (try_size_change(curr_path, desired_size)) {
+    memcpy(curr_path->ptr, new_path, new_path_len - cwd.len + 1);
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 /**
  * Checks if path is confined to a given starting folder.
  *

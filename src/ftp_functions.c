@@ -5,7 +5,7 @@
 
 const int BUF_SIZE = 255;
 
-int ftp_acct(const int sock_fd) {
+void ftp_acct(const int sock_fd) {
   send_status(220,
               "Permission already granted in response to PASS and/or USER");
 }
@@ -31,28 +31,12 @@ void ftp_cwd(const int sock_fd, const StrBuf *restrict param,
     } else {
       send_status(550, "Invalid path");
     }
-    // if ((temp = change_path(arg, &path_buf, &path_buf_size,
-    //                         &worker_data->dirinfo)) == 1) {
-    //   strncpy(&worker_data->dirinfo.c_dir[worker_data->dirinfo.base_dir_len],
-    //           &path_buf[worker_data->dirinfo.base_dir_len],
-    //           worker_data->dirinfo.c_dir_size -
-    //               worker_data->dirinfo.base_dir_len - 1);
-    //   ftp_sendline(sock_fd, "250 Okay");
-    // } else if (temp == -1) {
-    //   ftp_send_ascii(sock_fd, "550 ");
-    //   ftp_send_ascii(sock_fd, arg);
-    //   ftp_sendline(sock_fd, " does not exist");
-    // } else {
-    //   ftp_send_ascii(sock_fd, "550 ");
-    //   ftp_send_ascii(sock_fd, arg);
-    //   ftp_sendline(sock_fd, " is not a directory");
-    // }
   } else {
     send_status(504, "Client passed empty parameter");
   }
 }
 
-int ftp_help(const int sock_fd) {
+void ftp_help(const int sock_fd) {
   ftp_sendline(
       sock_fd,
       "214-The following commands are recognized.\r\n"
@@ -61,39 +45,22 @@ int ftp_help(const int sock_fd) {
   send_status(214, "Help OK.");
 }
 
-int ftp_cdup(const int sock_fd, const char *restrict arg,
-             char *restrict curr_path) {
-  int cd_result = 0;
+void ftp_cdup(const int sock_fd, const StrBuf *restrict param,
+              StrBuf *restrict curr_path, StrBuf *restrict path_buf) {
+  StrBuf dir_up = {.ptr = "../", .size = sizeof("../"), .len = 3};
+  char *new_path = NULL;
 
-  if (*arg == '\0') {
-    cd_result = safe_change_path(curr_path, "../");
-    if (cd_result) {
+  if (*param->ptr == '\0') {
+    new_path = validate_path(&dir_up, curr_path, path_buf);
+    if (new_path != NULL && is_valid_dir(new_path) &&
+        try_path_change(new_path, curr_path)) {
+      free(new_path);
       send_status(250, "Okay");
-      return 1;
-    } else if (cd_result == -1) {
-      ftp_send_ascii(sock_fd, "550 ");
-      ftp_send_ascii(sock_fd, arg);
-      ftp_sendline(sock_fd, " does not exist");
-      return 1;
-    } else if (cd_result == -2) {
-      ftp_send_ascii(sock_fd, "550 ");
-      ftp_send_ascii(sock_fd, arg);
-      ftp_sendline(sock_fd, " is not a directory");
-      return 1;
     } else {
-      return 0;
+      send_status(550, "Invalid path");
     }
-    // if ((temp = change_path("../", &path_buf, &path_buf_size,
-    //                         &worker_data->dirinfo)) == 1) {
-    //   strncpy(&worker_data->dirinfo.c_dir[worker_data->dirinfo.base_dir_len],
-    //           &path_buf[worker_data->dirinfo.base_dir_len],
-    //           worker_data->dirinfo.c_dir_size -
-    //               worker_data->dirinfo.base_dir_len - 1);
-    // ftp_sendline(sock_fd, "250 Okay");
   } else {
     send_status(504, "Client passed non-empty parameter");
-    return 1;
-    // ftp_sendline(sock_fd, "504 Client passed non-empty parameter");
   }
 }
 

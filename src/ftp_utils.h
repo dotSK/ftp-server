@@ -28,6 +28,8 @@ extern StrBuf cwd;
 
 void strbuf_free(StrBuf *buf);
 int try_size_change(StrBuf *restrict buf, const size_t size);
+int try_path_change(const char *restrict new_path,
+                    const StrBuf *restrict curr_path);
 char *validate_path(const StrBuf *restrict new_path,
                     const StrBuf *restrict curr_path,
                     StrBuf *restrict path_buf);
