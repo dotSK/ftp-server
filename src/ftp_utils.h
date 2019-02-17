@@ -9,6 +9,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +18,6 @@
 #include <sys/types.h>
 #include <threads.h>
 #include <unistd.h>
-#include <stdbool.h>
 
 typedef struct StrBuf {
   char *ptr;
@@ -28,12 +28,12 @@ typedef struct StrBuf {
 extern StrBuf cwd;
 
 void strbuf_free(StrBuf *buf);
-bool try_size_change(StrBuf *restrict buf, const size_t size);
-bool try_path_copy(const char *restrict new_path,
-                    const StrBuf *restrict curr_path);
-char *validate_path(const StrBuf *restrict new_path,
-                    const StrBuf *restrict curr_path,
-                    StrBuf *restrict path_buf);
+bool strbuf_change_size(StrBuf *restrict buf, const size_t size);
+bool save_new_path(const char *restrict new_path,
+                   const StrBuf *restrict curr_rel_path);
+StrBuf *validate_path(const StrBuf *restrict new_path,
+                      const StrBuf *restrict curr_path,
+                      StrBuf *restrict path_buf);
 bool is_valid_dir(const char *path);
 int get_port(const char *, struct addrinfo **);
 int ftp_sendline(int, const char *);

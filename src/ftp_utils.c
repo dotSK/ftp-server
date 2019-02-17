@@ -43,7 +43,7 @@ StrBuf *strbuf_from_char(const char *restrict str) {
  * Tries to reallocate buf if smaller than size,
  * or if it fails, tries to allocate new buffer using malloc.
  */
-bool try_size_change(StrBuf *restrict buf, const size_t size) {
+bool strbuf_change_size(StrBuf *restrict buf, const size_t size) {
   char *tmp_ptr = NULL;
 
   if (buf->size < size) {
@@ -68,11 +68,11 @@ bool try_size_change(StrBuf *restrict buf, const size_t size) {
  *
  * @return Boolean according to result.
  */
-bool try_path_copy(const StrBuf *restrict new_path,
+bool save_new_path(const StrBuf *restrict new_path,
                    const StrBuf *restrict curr_rel_path) {
   size_t rel_segment_size = new_path->len - cwd.len + 1;
 
-  if (try_size_change(curr_rel_path, rel_segment_size)) {
+  if (strbuf_change_size(curr_rel_path, rel_segment_size)) {
     memcpy(curr_rel_path->ptr, new_path->ptr + cwd.len, rel_segment_size);
     return true;
   } else {
@@ -83,18 +83,19 @@ bool try_path_copy(const StrBuf *restrict new_path,
 /**
  * Checks if path is confined to a given starting folder.
  *
- * @return *ptr if path is valid
+ * @return *ptr StrBuf struct if path is valid
  * @return NULL if path is invalid or there was an allocation error
  */
-char *validate_path(const StrBuf *restrict new_path,
+StrBuf *validate_path(const StrBuf *restrict new_path,
                     const StrBuf *restrict curr_path,
                     StrBuf *restrict path_buf) {
   size_t desired_size = 0;
   char *canonical_path = NULL;
+  StrBuf *path_wrapper = NULL;
 
   if (new_path->len > 0 && new_path->ptr[0] == '/') {
     desired_size = cwd.len + new_path->len + 1;
-    if (try_size_change(path_buf, desired_size)) {
+    if (strbuf_change_size(path_buf, desired_size)) {
       memcpy(path_buf->ptr, cwd.ptr, cwd.len);
       memcpy(path_buf->ptr + cwd.len, new_path->ptr, new_path->len + 1);
     } else {
@@ -102,7 +103,7 @@ char *validate_path(const StrBuf *restrict new_path,
     }
   } else {
     desired_size = cwd.len + curr_path->len + new_path->len + 1;
-    if (try_size_change(path_buf, desired_size)) {
+    if (strbuf_change_size(path_buf, desired_size)) {
       memcpy(path_buf->ptr, cwd.ptr, cwd.len);
       memcpy(path_buf->ptr + cwd.len, curr_path->ptr, curr_path->len);
       memcpy(path_buf->ptr + cwd.len + curr_path->len, new_path->ptr,
@@ -117,10 +118,11 @@ char *validate_path(const StrBuf *restrict new_path,
   if (canonical_path != NULL) {
     if (!path_confined(canonical_path)) {
       free(canonical_path);
-      canonical_path = NULL;
+    } else {
+      path_wrapper = strbuf_from_char(canonical_path);
     }
   }
-  return canonical_path;
+  return path_wrapper;
 }
 
 // TODO: how to define FTP bounds?
