@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <threads.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 typedef struct StrBuf {
   char *ptr;
@@ -27,13 +28,13 @@ typedef struct StrBuf {
 extern StrBuf cwd;
 
 void strbuf_free(StrBuf *buf);
-int try_size_change(StrBuf *restrict buf, const size_t size);
-int try_path_change(const char *restrict new_path,
+bool try_size_change(StrBuf *restrict buf, const size_t size);
+bool try_path_copy(const char *restrict new_path,
                     const StrBuf *restrict curr_path);
 char *validate_path(const StrBuf *restrict new_path,
                     const StrBuf *restrict curr_path,
                     StrBuf *restrict path_buf);
-int is_valid_dir(const char *path);
+bool is_valid_dir(const char *path);
 int get_port(const char *, struct addrinfo **);
 int ftp_sendline(int, const char *);
 int ftp_send_ascii(int, const char *);

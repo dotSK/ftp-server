@@ -17,7 +17,7 @@ void ftp_cwd(const int sock_fd, const StrBuf *restrict param,
 
   if (*param->ptr != '\0') {
     new_path = validate_path(param, curr_path, path_buf);
-    if (new_path != NULL && is_valid_dir(new_path)) {
+    if (new_path != NULL && is_valid_dir(new_path) && try_path_copy()) {
       new_path_len = strlen(new_path);
       size_t desired_size = new_path_len - cwd.len + 1;
       if (try_size_change(curr_path, desired_size)) {

@@ -6,50 +6,85 @@ void strbuf_free(StrBuf *buf) {
   buf->len = 0;
 }
 
+void strbuf_destroy(StrBuf *buf) {
+  strbuf_free(buf->ptr);
+  free(buf);
+}
+
+/**
+ * Creates new StrBuf.
+ */
+StrBuf *strbuf_new(void) {
+  StrBuf *temp = malloc(sizeof(StrBuf));
+
+  if (temp != NULL) {
+    temp->ptr = NULL;
+    temp->len = 0;
+    temp->size = 0;
+  }
+  return temp;
+}
+
+/**
+ * Create new StrBuf from existing string.
+ */
+StrBuf *strbuf_from_char(const char *restrict str) {
+  StrBuf *temp = malloc(sizeof(StrBuf));
+
+  if (temp != NULL) {
+    temp->ptr = str;
+    temp->len = strlen(str);
+    temp->size = temp->len + 1;
+  }
+  return temp;
+}
+
 /**
  * Tries to reallocate buf if smaller than size,
  * or if it fails, tries to allocate new buffer using malloc.
  */
-int try_size_change(StrBuf *restrict buf, const size_t size) {
+bool try_size_change(StrBuf *restrict buf, const size_t size) {
+  char *tmp_ptr = NULL;
+
   if (buf->size < size) {
-    char *tmp = NULL;
-    if ((tmp = realloc(buf, size)) == NULL) {
-      if ((tmp = malloc(size)) == NULL) {
-        return 0;
-      } else {
-        strbuf_free(buf);
-        buf->ptr = tmp;
-        buf->size = size;
-        return 1;
-      }
-    } else {
+    if ((tmp_ptr = realloc(buf, size)) != NULL) {
       buf->size = size;
-      return 1;
+    } else if ((tmp_ptr = malloc(size)) != NULL) {
+      strbuf_free(buf);
+      buf->ptr = tmp_ptr;
+      buf->size = size;
+    } else {
+      return false;
     }
-  } else {
-    return 1;
   }
+  return true;
 }
 
-int try_path_change(const char *restrict new_path,
-                    const StrBuf *restrict curr_path) {
-  size_t new_path_len = strlen(new_path);
-  size_t desired_size = new_path_len - cwd.len + 1;
+/**
+ * Tries to change path.
+ *
+ * @param new_path path to be copied to buffer
+ * @param curr_rel_path current relative path buffer (copy destination)
+ *
+ * @return Boolean according to result.
+ */
+bool try_path_copy(const StrBuf *restrict new_path,
+                   const StrBuf *restrict curr_rel_path) {
+  size_t rel_segment_size = new_path->len - cwd.len + 1;
 
-  if (try_size_change(curr_path, desired_size)) {
-    memcpy(curr_path->ptr, new_path, new_path_len - cwd.len + 1);
-    return 1;
+  if (try_size_change(curr_rel_path, rel_segment_size)) {
+    memcpy(curr_rel_path->ptr, new_path->ptr + cwd.len, rel_segment_size);
+    return true;
   } else {
-    return 0;
+    return false;
   }
 }
 
 /**
  * Checks if path is confined to a given starting folder.
  *
- * Return values:
- *    *ptr if path is valid
- *    NULL if path is invalid or there was an allocation error
+ * @return *ptr if path is valid
+ * @return NULL if path is invalid or there was an allocation error
  */
 char *validate_path(const StrBuf *restrict new_path,
                     const StrBuf *restrict curr_path,
@@ -88,23 +123,30 @@ char *validate_path(const StrBuf *restrict new_path,
   return canonical_path;
 }
 
+// TODO: how to define FTP bounds?
 /**
- * Checks if given path is nested inside given directory
+ * Checks if given path is confined withing FTP bounds.
  */
-static int path_confined(const char *restrict path) {
+static bool path_confined(const char *restrict path) {
   size_t path_len = strlen(path);
   if (path_len < cwd.len) {
-    return 0;
+    return false;
   } else {
     return strncmp(cwd.ptr, path, cwd.len) == 0;
   }
 }
 
-int is_valid_dir(const char *path) {
+/**
+ * Checks if path is valid dir.
+ *
+ * @param path Preferrably absolute canonical path.
+ * @return Boolean according to result.
+ */
+bool is_valid_dir(const char *path) {
   struct stat result;
 
   if (lstat(path, &result) != 0) {
-    return 0;
+    return false;
   } else {
     return S_ISDIR(result.st_mode);
   }
