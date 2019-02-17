@@ -1,7 +1,7 @@
 {
 	"folders": [
 		{
-			"path": "zad_D(ftp)"
+			"path": "."
 		}
 	],
 	"settings": {
@@ -23,7 +23,7 @@
 			"aio.h": "c",
 			"libaio.h": "c"
 		},
-		"C_Cpp.default.cStandard": "c99",
+		"C_Cpp.default.cStandard": "c11",
 		"C_Cpp.default.intelliSenseMode": "gcc-x64",
 		"C_Cpp.clang_format_path": "/usr/bin/clang-format"
 	}

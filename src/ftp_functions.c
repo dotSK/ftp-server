@@ -44,7 +44,8 @@ int ftp_help(const int sock_fd) {
   send_status(214, "Help OK.");
 }
 
-int ftp_cdup(const int sock_fd, const char * restrict arg, char * restrict curr_path) {
+int ftp_cdup(const int sock_fd, const char *restrict arg,
+             char *restrict curr_path) {
   int cd_result = 0;
 
   if (*arg == '\0') {
@@ -172,22 +173,15 @@ int ftp_mkd(const int sock_fd, const char *arg) {
   }
 }
 
-int ftp_mode(const int sock_fd, const char *arg) {
-  if (!strcmp(arg, "s")) {
-    send_status(200, "Stream mode (deprecated)");
-  } else {
-    send_status(504, "Command not implemented for that parameter");
-    // ftp_sendline(sock_fd, "504 Command not implemented for that
-    // parameter");
-  }
-}
-
-int ftp_mdtm(const int sock_fd, const char *arg) {
+int ftp_mdtm(const int sock_fd, const char *restrict arg,
+             const unsigned int arg_buf_size, const char *restrict curr_path) {
   struct tm lt;
   char timbuf[80];
+  int cd_result = 0;
+
   if (*arg != '\0') {
-    if (change_path(arg, &path_buf, &path_buf_size, &worker_data->dirinfo) ==
-        2) {
+    cd_result = safe_change_path(curr_path, arg);
+    if (cd_result) {
       stat(path_buf, &stat_buf);
       localtime_r(&stat_buf.st_mtime, &lt);
       strftime(timbuf, sizeof(timbuf), "%Y%m%d%H%M%S", &lt);
@@ -199,7 +193,7 @@ int ftp_mdtm(const int sock_fd, const char *arg) {
       ftp_sendline(sock_fd, "\" does not exist.");
     }
   } else {
-    ftp_sendline(sock_fd, "504 Client passed empty parameter.");
+    send_status(504, "Client passed empty parameter.");
   }
 }
 
