@@ -1,65 +1,5 @@
 #include "ftp_utils.h"
 
-void strbuf_free(StrBuf *buf) {
-  free(buf->ptr);
-  buf->size = 0;
-  buf->len = 0;
-}
-
-void strbuf_destroy(StrBuf *buf) {
-  strbuf_free(buf->ptr);
-  free(buf);
-}
-
-/**
- * Creates new StrBuf.
- */
-StrBuf *strbuf_new(void) {
-  StrBuf *temp = malloc(sizeof(StrBuf));
-
-  if (temp != NULL) {
-    temp->ptr = NULL;
-    temp->len = 0;
-    temp->size = 0;
-  }
-  return temp;
-}
-
-/**
- * Create new StrBuf from existing string.
- */
-StrBuf *strbuf_from_char(const char *restrict str) {
-  StrBuf *temp = malloc(sizeof(StrBuf));
-
-  if (temp != NULL) {
-    temp->ptr = str;
-    temp->len = strlen(str);
-    temp->size = temp->len + 1;
-  }
-  return temp;
-}
-
-/**
- * Tries to reallocate buf if smaller than size,
- * or if it fails, tries to allocate new buffer using malloc.
- */
-bool strbuf_change_size(StrBuf *restrict buf, const size_t size) {
-  char *tmp_ptr = NULL;
-
-  if (buf->size < size) {
-    if ((tmp_ptr = realloc(buf, size)) != NULL) {
-      buf->size = size;
-    } else if ((tmp_ptr = malloc(size)) != NULL) {
-      strbuf_free(buf);
-      buf->ptr = tmp_ptr;
-      buf->size = size;
-    } else {
-      return false;
-    }
-  }
-  return true;
-}
-
 /**
  * Tries to change path.
  *
@@ -87,8 +27,8 @@ bool save_new_path(const StrBuf *restrict new_path,
  * @return NULL if path is invalid or there was an allocation error
  */
 StrBuf *validate_path(const StrBuf *restrict new_path,
-                    const StrBuf *restrict curr_path,
-                    StrBuf *restrict path_buf) {
+                      const StrBuf *restrict curr_path,
+                      StrBuf *restrict path_buf) {
   size_t desired_size = 0;
   char *canonical_path = NULL;
   StrBuf *path_wrapper = NULL;
@@ -151,6 +91,16 @@ bool is_valid_dir(const char *path) {
     return false;
   } else {
     return S_ISDIR(result.st_mode);
+  }
+}
+
+bool is_valid_file(const char *path) {
+  struct stat result;
+
+  if(lstat(path, &result) != 0) {
+    return false;
+  } else {
+    return S_ISREG(result.st_mode);
   }
 }
 

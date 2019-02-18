@@ -1,9 +1,4 @@
 #include "ftp_functions.h"
-#include "ftp_utils.h"
-#include <limits.h>
-#include <malloc.h>
-
-const int BUF_SIZE = 255;
 
 void ftp_acct(const int sock_fd) {
   send_status(220,
@@ -11,18 +6,13 @@ void ftp_acct(const int sock_fd) {
 }
 
 void ftp_cwd(const int sock_fd, const StrBuf *restrict param,
-             StrBuf *restrict curr_path, StrBuf *restrict path_buf) {
-  char *new_path = NULL;
-  size_t new_path_len = 0;
+             StrBuf *restrict curr_path, StrBuf *restrict buf) {
+  StrBuf *new_path = NULL;
 
   if (*param->ptr != '\0') {
-    new_path = validate_path(param, curr_path, path_buf);
-    if (new_path != NULL && is_valid_dir(new_path) && try_path_copy()) {
-      new_path_len = strlen(new_path);
-      size_t desired_size = new_path_len - cwd.len + 1;
-      if (try_size_change(curr_path, desired_size)) {
-        memcpy(curr_path->ptr, new_path, new_path_len - cwd.len + 1);
-        free(new_path);
+    new_path = validate_path(param, curr_path, buf);
+    if (new_path != NULL && is_valid_dir(new_path->ptr)) {
+      if (save_new_path(new_path, curr_path)) {
         send_status(250, "Okay");
       } else {
         send_status(451,
@@ -31,6 +21,7 @@ void ftp_cwd(const int sock_fd, const StrBuf *restrict param,
     } else {
       send_status(550, "Invalid path");
     }
+    strbuf_destroy(new_path);
   } else {
     send_status(504, "Client passed empty parameter");
   }
@@ -46,65 +37,46 @@ void ftp_help(const int sock_fd) {
 }
 
 void ftp_cdup(const int sock_fd, const StrBuf *restrict param,
-              StrBuf *restrict curr_path, StrBuf *restrict path_buf) {
-  StrBuf dir_up = {.ptr = "../", .size = sizeof("../"), .len = 3};
-  char *new_path = NULL;
+              StrBuf *restrict curr_path, StrBuf *restrict buf) {
+  StrBuf *dir_up = strbuf_from_char("../");
+  StrBuf *new_path = NULL;
 
   if (*param->ptr == '\0') {
-    new_path = validate_path(&dir_up, curr_path, path_buf);
+    new_path = validate_path(&dir_up, curr_path, buf);
     if (new_path != NULL && is_valid_dir(new_path) &&
-        try_path_change(new_path, curr_path)) {
-      free(new_path);
+        save_new_path(new_path, curr_path)) {
       send_status(250, "Okay");
     } else {
       send_status(550, "Invalid path");
     }
+    strbuf_destroy(new_path);
   } else {
     send_status(504, "Client passed non-empty parameter");
   }
 }
 
-int ftp_dele(const int sock_fd, const char *arg, const char *base_path,
-             const char *rel_path) {
-  int path_valid = 0;
-  char path_buf[BUF_SIZE];
+void ftp_dele(const int sock_fd, const StrBuf *restrict param,
+              const StrBuf *restrict curr_path, StrBuf *restrict buf) {
+  StrBuf *new_path = NULL;
+  int result = 0;
 
-  if (*arg != '\0') {
-    if (arg[0] == '/') {
-      path_valid = path_valid(base_path, arg);
-    } else {
-      // TODO: concatenate to buffer
-      path_valid = path_valid(base_path, path_buf);
-    }
-    // if (change_path(arg, &path_buf, &path_buf_size,
-    //                 &worker_data->dirinfo) == 2) {
-    if (path_valid) {
-      if (unlink(arg) == 0) {
-        ftp_send_ascii(sock_fd, "250 File \"");
-        ftp_send_ascii(sock_fd, base_name_ptr(path_buf));
-        ftp_sendline(sock_fd, "\" was removed successfully.");
-        return 1;
-      } else if (errno == EISDIR) {
-        ftp_send_ascii(sock_fd, "450 File \"");
-        ftp_send_ascii(sock_fd, base_name_ptr(path_buf));
-        ftp_sendline(sock_fd, "\" is a directory.");
-        return 1;
+  if (*param->ptr != '\0') {
+    new_path = validate_path(param, curr_path, buf);
+    if (new_path != NULL && is_valid_file(new_path->ptr)) {
+      result = unlink(new_path->ptr);
+      if (result != 0) {
+        if (errno == EACCES || errno == ENOENT || errno == EROFS) {
+          send_status(550, "Cannot remove file");
+        } else {
+          send_status(450, "Cannot remove file right now, try again later");
+        }
       } else {
-        ftp_send_ascii(sock_fd, "450 Couldn't remove file \"");
-        ftp_send_ascii(sock_fd, base_name_ptr(path_buf));
-        ftp_sendline(sock_fd, "\".");
-        return 1;
+        send_status(250, "File was removed successfully");
       }
-    } else {
-      ftp_send_ascii(sock_fd, "550 File \"");
-      ftp_send_ascii(sock_fd, base_name_ptr(path_buf));
-      ftp_sendline(sock_fd, "\" does not exist.");
-      return 1;
     }
+    strbuf_destroy(new_path);
   } else {
     send_status(504, "Client passed empty parameter");
-    return 1;
-    // ftp_sendline(sock_fd, "504 Client passed empty parameter");
   }
 }
 
@@ -157,25 +129,25 @@ int ftp_mkd(const int sock_fd, const char *arg) {
   }
 }
 
-int ftp_mdtm(const int sock_fd, const char *restrict arg,
-             const unsigned int arg_buf_size, const char *restrict curr_path) {
+void ftp_mdtm(const int sock_fd, const StrBuf *restrict param,
+              const StrBuf *restrict curr_path, StrBuf *restrict buf) {
+  StrBuf *new_path = NULL;
+  struct stat stat_buf;
   struct tm lt;
-  char timbuf[80];
-  int cd_result = 0;
 
-  if (*arg != '\0') {
-    cd_result = safe_change_path(curr_path, arg);
-    if (cd_result) {
-      stat(path_buf, &stat_buf);
+  if (*param->ptr != '\0') {
+    new_path = validate_path(param, curr_path, buf);
+    if (new_path != NULL &&
+        (is_valid_file(new_path->ptr) || is_valid_dir(new_path->ptr))) {
+      stat(new_path, &stat_buf);
       localtime_r(&stat_buf.st_mtime, &lt);
-      strftime(timbuf, sizeof(timbuf), "%Y%m%d%H%M%S", &lt);
-      ftp_send_ascii(sock_fd, "250 ");
-      ftp_sendline(sock_fd, timbuf);
+      strbuf_update(buf, "250 ", 0, sizeof("250 "));
+      strftime(buf->ptr + 4, buf->size - 4, "%Y%m%d%H%M%S", &lt);
+      ftp_sendline(sock_fd, buf->ptr);
     } else {
-      ftp_send_ascii(sock_fd, "550 File \"");
-      ftp_send_ascii(sock_fd, base_name_ptr(path_buf));
-      ftp_sendline(sock_fd, "\" does not exist.");
+      send_status(550, "Invalid file specified");
     }
+    strbuf_destroy(new_path);
   } else {
     send_status(504, "Client passed empty parameter.");
   }
