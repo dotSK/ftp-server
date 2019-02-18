@@ -37,6 +37,7 @@ int main(int argc, char *argv[]) {
     }
     exit(1);
   } else {
+    init_threads(sfd);
     conn_handler(sfd);
     close(sfd);
   }
@@ -45,30 +46,49 @@ int main(int argc, char *argv[]) {
 }
 
 // TODO: inteFUCCINzivne prepisat na nieco normalne/funkcne
-int conn_handler(int sockfd) {
+bool init_threads(int sock_fd) {
+  unsigned int thread_count = 0;
+  pthread_t *thread_ids = NULL;
   int tmp_sock_fd = 0;
   int epoll_fd = 0;
-  struct epoll_event epoll_cfg;
-  struct epoll_event *fd_events;
-  struct worker_pool *workers;
 
-  // allocate memory for worker data storage
-  workers = calloc(sizeof(struct worker_pool), INIT_THRD_POOL_SIZE);
+  int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
+  thread_count = cpu_count - 1 + 10;
 
-  if (listen(sockfd, BACKLOG) == -1) {
+  if (listen(sock_fd, BACKLOG_SIZE) == -1) {
     if (errno != EINTR) {
       perror("listen");
       exit(1);
     }
   }
 
+  thread_ids = malloc(sizeof(pthread_t) * thread_count);
+  if (thread_ids == NULL) {
+    perror("malloc");
+    exit(1);
+  }
+
+  for (int i = 0; i < thread_count; i++) {
+    int result =
+        pthread_create(thread_ids + i, NULL, &server_thrd_start, &sock_fd);
+    if (result != 0) {
+      perror("pthread");
+      free(thread_ids);
+      exit(1);
+    }
+  }
+
+  server_thrd_start(&sock_fd);
+}
+
+void *server_thrd_start(void *arg) {
   epoll_fd = epoll_create1(0);
   if (epoll_fd == -1) {
     perror("epoll");
     exit(1);
   }
 
-  epoll_cfg.events = EPOLLIN | EPOLLPRI | EPOLLHUP | EPOLLERR;
+  epoll_cfg.events = EPOLLIN | EPOLLPRI | EPOLLHUP | EPOLLERR | EPOLLEXCLUSIVE;
   epoll_cfg.data.fd = sockfd;
 
   if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sockfd, &epoll_cfg) != 0) {
