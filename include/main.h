@@ -15,10 +15,12 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <assert.h>
 
 #define send_status(NUM, MSG) ftp_sendline(sock_fd, #NUM MSG)
 
-enum FtpOp {
+enum FtpOp
+{
   Acct,
   CdUp, // Change working directory to ../
   Cwd,  // Change working directory
@@ -45,8 +47,17 @@ enum FtpOp {
   Quit
 };
 
-static const int BACKLOG_SIZE = 10;
+typedef struct conn_state {
+  int fd;
+} ConnState;
+
+typedef struct thrd_data
+{
+  int sock_fd;
+} ThrdData;
+
 static const int PORT_NUM = 4785;
+static const unsigned int NUM_OF_WORKERS = 10;
 
 StrBuf cwd = {.ptr = NULL, .size = 0, .len = 0};
 

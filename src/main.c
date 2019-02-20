@@ -1,11 +1,11 @@
 #include "main.h"
 
-static int end_of_server = 0;
-static struct addrinfo *server_addr;
+static bool shutdown = false;
 
 int main(int argc, char *argv[]) {
   int sfd = 0;
   struct sigaction sigint_handler;
+  bool status = false;
 
   // set signal handler for SIGINT
   memset(&sigint_handler, 0, sizeof(sigint_handler));
@@ -31,91 +31,107 @@ int main(int argc, char *argv[]) {
     strbuf_free(&cwd);
     exit(1);
   } else {
-    init_threads(sfd);
-    conn_handler(sfd);
+    status = init_threads(sfd);
+    // conn_handler(sfd);
     close(sfd);
   }
-
-  exit(0);
+  strbuf_free(&cwd);
+  exit(!status);
 }
 
 bool init_threads(int sock_fd) {
   unsigned int thread_count = 0;
   pthread_t *thread_ids = NULL;
+  ThrdData *thrd_data = NULL;
   int tmp_sock_fd = 0;
   int epoll_fd = 0;
 
   // TODO: LINUXism
-  int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
-  thread_count = cpu_count - 1 + 10;
+  long cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
+  // TODO: get rid of upper limit
+  assert(cpu_count > 0 && cpu_count < 1024);
+  thread_count = ((unsigned int)cpu_count) - 1 + NUM_OF_WORKERS;
 
-  if (listen(sock_fd, BACKLOG_SIZE) == -1) {
-    if (errno != EINTR) {
-      perror("listen");
-      exit(1);
-    }
+  if (listen(sock_fd, SOMAXCONN) != 0) {
+    perror("listen");
+    return false;
   }
 
   thread_ids = malloc(sizeof(pthread_t) * thread_count);
-  if (thread_ids == NULL) {
+  thrd_data = malloc(sizeof(ThrdData));
+  if (thread_ids == NULL || thrd_data == NULL) {
     perror("malloc");
-    exit(1);
+    return false;
   }
 
+  thrd_data->sock_fd = sock_fd;
   for (int i = 0; i < thread_count; i++) {
-    int result =
-        pthread_create(thread_ids + i, NULL, &server_thrd_start, &sock_fd);
-    if (result != 0) {
-      perror("pthread");
+    if (pthread_create(thread_ids + i, NULL, &server_thrd_start, &thrd_data) !=
+        0) {
       free(thread_ids);
-      exit(1);
+      return false;
     }
   }
 
-  server_thrd_start(&sock_fd);
+  server_thrd_start(&thrd_data);
 }
 
-void *server_thrd_start(void *arg) {
+void *server_thrd_start(const ThrdData *data) {
+  int epoll_fd = 0;
+  struct epoll_event epoll_cfg;
+  ConnState *tmp_state = NULL;
+
   epoll_fd = epoll_create1(0);
   if (epoll_fd == -1) {
-    perror("epoll");
-    exit(1);
+    perror("epoll_create1");
+    // TODO: sensible return value
+    pthread_exit(NULL);
   }
 
-  epoll_cfg.events = EPOLLIN | EPOLLPRI | EPOLLHUP | EPOLLERR | EPOLLEXCLUSIVE;
-  epoll_cfg.data.fd = sockfd;
+  tmp_state = malloc(sizeof(ConnState));
+  if (tmp_state == NULL) {
+    perror("malloc");
+    // TODO: sensible return value
+    pthread_exit(NULL);
+  }
+  tmp_state->fd = data->sock_fd;
+  // TODO: do i really want edge-triggered polling?
+  epoll_cfg.events = EPOLLIN | EPOLLET | EPOLLEXCLUSIVE;
+  epoll_cfg.data.ptr = tmp_state;
 
-  if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sockfd, &epoll_cfg) != 0) {
+  if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, data->sock_fd, &epoll_cfg) != 0) {
     perror("epoll_ctl");
-    exit(1);
+    // TODO: sensible return value
+    pthread_exit(NULL);
   }
 
-  while (!end_of_server) {
-    if (epoll_wait(epoll_fd, &fd_events, 1, -1) != 1) {
+  const struct epoll_event *event_queue = NULL;
+  while (!shutdown) {
+    if (epoll_wait(epoll_fd, &event_queue, 1, -1) != 1) {
       perror("epoll_wait");
-      end_of_server = 1;
+      shutdown = true;
     } else {
-      switch (fd_events[0].events) {
-      //
+      switch (event_queue[0].events) {
       case EPOLLERR:
         fputs("epolerr happened...", stderr);
-        end_of_server = 1;
+        shutdown = true;
         break;
 
       // socket closed - connection ended
       case EPOLLHUP:
-        end_of_server = 1;
+        shutdown = true;
         break;
 
       // socket special exception (TODO: maybe handle later?)
       case EPOLLPRI:
         fputs("epollpri happened...", stderr);
-        end_of_server = 1;
+        shutdown = true;
         break;
 
       // socket has data ready
       case EPOLLIN:
-        if (fd_events[0].data.fd == sockfd) {
+        // FIXME: lolwut?
+        if (((ConnState *)event_queue[0].data.ptr)->fd == data->sock_fd) {
           // accept connection
           if (accept(sockfd, NULL, NULL) >= 0) {
 
@@ -131,7 +147,7 @@ void *server_thrd_start(void *arg) {
       default:
         fputs("epoll_wait returned non-selected signal, this should not happen",
               stderr);
-        end_of_server = 1;
+        shutdown = 1;
         break;
       }
     }
@@ -290,7 +306,7 @@ void start_session(int sock_fd, char *recv_buf, int buf_size) {
     exit(1);
   }
 
-  while (!exit_cond && !end_of_server) {
+  while (!exit_cond && !shutdown) {
     if ((cmd_argument = ftp_cmd_get(sock_fd, recv_buf, buf_size)) == NULL) {
       exit_cond = 1;
       continue;
@@ -648,6 +664,6 @@ void sigusr_func(int sigid) {
 
 void sigint_func(int sigid) {
   fputs("\nFTP Server is shutting down gracefully...\n", stderr);
-  end_of_server = 1;
+  shutdown = 1;
   return;
 }

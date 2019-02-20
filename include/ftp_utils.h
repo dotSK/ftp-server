@@ -18,7 +18,6 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <threads.h>
 #include <unistd.h>
 
 extern StrBuf cwd;
