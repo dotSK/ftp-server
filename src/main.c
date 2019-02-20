@@ -27,14 +27,8 @@ int main(int argc, char *argv[]) {
   // bind socket
   sfd = get_bound_sock(PORT_NUM, INADDR_ANY);
   if (sfd < 0) {
-    assert(sfd == -1 || sfd == -2);
-    if (sfd == -1) {
-      fputs("socket cannot be created", stderr);
-    } else if (sfd == -2) {
-      fputs("socket cannot be bound", stderr);
-    } else {
-      fputs("assertion error, this should not happen", stderr);
-    }
+    perror('socket/bind');
+    strbuf_free(&cwd);
     exit(1);
   } else {
     init_threads(sfd);
@@ -45,13 +39,13 @@ int main(int argc, char *argv[]) {
   exit(0);
 }
 
-// TODO: inteFUCCINzivne prepisat na nieco normalne/funkcne
 bool init_threads(int sock_fd) {
   unsigned int thread_count = 0;
   pthread_t *thread_ids = NULL;
   int tmp_sock_fd = 0;
   int epoll_fd = 0;
 
+  // TODO: LINUXism
   int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
   thread_count = cpu_count - 1 + 10;
 

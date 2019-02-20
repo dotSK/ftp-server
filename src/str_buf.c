@@ -10,9 +10,9 @@ void strbuf_free(StrBuf *buf) {
 
 void strbuf_destroy(StrBuf *buf) {
   if (buf != NULL) {
-    strbuf_free(buf->ptr);
-    free(buf);
+    free(buf->ptr);
   }
+  free(buf);
 }
 
 /**
@@ -29,6 +29,11 @@ StrBuf *strbuf_new(void) {
   return temp;
 }
 
+/**
+ * Modify string and update metadata
+ * 
+ * no null check (str, buf)
+ */
 bool *strbuf_update(StrBuf *restrict buf, const char *restrict str,
                     const size_t buf_offset, const size_t str_size) {
   if (strbuf_change_size(buf, str_size + buf_offset)) {
@@ -59,7 +64,7 @@ StrBuf *strbuf_from_char(const char *str) {
  * Tries to reallocate buf if smaller than size,
  * or if it fails, tries to allocate new buffer using malloc.
  *
- * Does not do NULL check.
+ * no null check
  */
 bool strbuf_change_size(StrBuf *buf, const size_t size) {
   char *tmp_ptr = NULL;

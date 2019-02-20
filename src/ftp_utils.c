@@ -7,6 +7,8 @@
  * @param curr_rel_path current relative path buffer (copy destination)
  *
  * @return Boolean according to result.
+ *
+ * no null check
  */
 bool save_new_path(const StrBuf *restrict new_path,
                    const StrBuf *restrict curr_rel_path) {
@@ -25,6 +27,8 @@ bool save_new_path(const StrBuf *restrict new_path,
  *
  * @return *ptr StrBuf struct if path is valid
  * @return NULL if path is invalid or there was an allocation error
+ *
+ * no null check
  */
 StrBuf *validate_path(const StrBuf *restrict new_path,
                       const StrBuf *restrict curr_path,
@@ -68,6 +72,8 @@ StrBuf *validate_path(const StrBuf *restrict new_path,
 // TODO: how to define FTP bounds?
 /**
  * Checks if given path is confined withing FTP bounds.
+ *
+ * no null check
  */
 static bool path_confined(const char *restrict path) {
   size_t path_len = strlen(path);
@@ -83,6 +89,8 @@ static bool path_confined(const char *restrict path) {
  *
  * @param path Preferrably absolute canonical path.
  * @return Boolean according to result.
+ *
+ * no null check
  */
 bool is_valid_dir(const char *path) {
   struct stat result;
@@ -94,10 +102,17 @@ bool is_valid_dir(const char *path) {
   }
 }
 
+/**
+ * Checks if path is valid regular file.
+ *
+ * @param path Preferrably absolute canonical path.
+ *
+ * no null check
+ */
 bool is_valid_file(const char *path) {
   struct stat result;
 
-  if(lstat(path, &result) != 0) {
+  if (lstat(path, &result) != 0) {
     return false;
   } else {
     return S_ISREG(result.st_mode);
@@ -201,18 +216,14 @@ int get_bound_sock(unsigned short int portnum, uint32_t ip_address) {
   sock_addr.sin_family = AF_INET;
   sock_addr.sin_port = htons(portnum);
   sock_addr.sin_addr.s_addr = htonl(ip_address);
-  sfd = socket(AF_INET, SOCK_STREAM,
-               6); // ipv4 sock, tcp sock, tcp protocol number
-  if (sfd == -1) {
-    perror("socket");
-    return -1; // socket cannot be created
-  }
+  // non-blocking socket for epoll?
+  sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 6);
 
-  if (bind(sfd, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) != 0) {
-    perror("bind");
-    return -2; // socket cannot be bound
+  if (sfd >= 0) {
+    if (bind(sfd, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) != 0) {
+      sfd = -1;
+    }
   }
-
   return sfd;
 }
 
