@@ -79,7 +79,6 @@ bool init_threads(int sock_fd) {
 void *server_thrd_start(const ThrdData *data) {
   int epoll_fd = 0;
   struct epoll_event epoll_cfg;
-  ConnState *tmp_state = NULL;
 
   epoll_fd = epoll_create1(0);
   if (epoll_fd == -1) {
@@ -88,16 +87,16 @@ void *server_thrd_start(const ThrdData *data) {
     pthread_exit(NULL);
   }
 
-  tmp_state = malloc(sizeof(ConnState));
-  if (tmp_state == NULL) {
+  ConnState *listen_state = malloc(sizeof(ConnState));
+  if (listen_state == NULL) {
     perror("malloc");
     // TODO: sensible return value
     pthread_exit(NULL);
   }
-  tmp_state->fd = data->sock_fd;
+  listen_state->fd = data->sock_fd;
   // TODO: do i really want edge-triggered polling?
   epoll_cfg.events = EPOLLIN | EPOLLET | EPOLLEXCLUSIVE;
-  epoll_cfg.data.ptr = tmp_state;
+  epoll_cfg.data.ptr = listen_state;
 
   if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, data->sock_fd, &epoll_cfg) != 0) {
     perror("epoll_ctl");
@@ -106,8 +105,29 @@ void *server_thrd_start(const ThrdData *data) {
   }
 
   const struct epoll_event *event_queue = NULL;
+  int epoll_status = 0;
   while (!shutdown) {
-    if (epoll_wait(epoll_fd, &event_queue, 1, -1) != 1) {
+    epoll_status = epoll_wait(epoll_fd, &event_queue, EPOLL_MAX_EVENTS, EPOLL_TIMEOUT);
+    // TODO: should this be here?
+    assert(epoll_status == -1 || epoll_status >= 0);
+    if (epoll_status == -1) {
+      if (errno != EINTR) {
+        // FIXME: cleanup & exit
+      }
+    } else if (epoll_status > 0) {
+      for (int i = 0; i < epoll_status; i++) {
+        ConnState *state = (ConnState *) event_queue[i].data.ptr;
+        if (state->fd == data->sock_fd) {
+
+        } else {
+
+        }
+      }
+    } else {
+      // TODO: check worker threads? What are we doing when no new connection arrives?
+    }
+
+    if (epoll_wait != 1) {
       perror("epoll_wait");
       shutdown = true;
     } else {

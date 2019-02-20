@@ -47,8 +47,10 @@ enum FtpOp
   Quit
 };
 
-typedef struct conn_state {
+typedef struct conn_state
+{
   int fd;
+  StrBuf path;
 } ConnState;
 
 typedef struct thrd_data
@@ -58,6 +60,8 @@ typedef struct thrd_data
 
 static const int PORT_NUM = 4785;
 static const unsigned int NUM_OF_WORKERS = 10;
+static const int EPOLL_MAX_EVENTS = 100;
+static const int EPOLL_TIMEOUT = 100;
 
 StrBuf cwd = {.ptr = NULL, .size = 0, .len = 0};
 
