@@ -32,7 +32,7 @@ enum FtpOp
   Mdtm,
   NoOp,
   Port,
-  Pwd, // print current workin directory
+  Pwd, // print current working directory
   Rest,
   Retr,
   RnFr, // Rename a file from
@@ -65,6 +65,9 @@ static const int EPOLL_TIMEOUT = 100;
 
 StrBuf cwd = {.ptr = NULL, .size = 0, .len = 0};
 
+bool init_server(int sock_fd);
+bool conn_arbiter(int sock_fd, pthread_t *thread_ids, ThrdData *thrd_data, size_t thrd_data_len);
+void *server_thrd_start(const ThrdData *data);
 static void *client_handler(void *socket_file_descriptor);
 static void *ftp_data_worker(void *worker_data_struct);
 int conn_handler(int socket_file_descriptor);

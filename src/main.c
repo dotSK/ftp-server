@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
   cwd.len = strlen(cwd.ptr);
   cwd.size = cwd.len + 1;
 
-  // print some informations
+  // print some information
   fprintf(stdout, "listening on port: %d\n", PORT_NUM);
   fprintf(stdout, "current working directory: %s", cwd);
 
@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     strbuf_free(&cwd);
     exit(1);
   } else {
-    status = init_threads(sfd);
+    status = init_server(sfd);
     // conn_handler(sfd);
     close(sfd);
   }
@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
   exit(!status);
 }
 
-bool init_threads(int sock_fd) {
+bool init_server(int sock_fd) {
   unsigned int thread_count = 0;
   pthread_t *thread_ids = NULL;
   ThrdData *thrd_data = NULL;
@@ -49,6 +49,7 @@ bool init_threads(int sock_fd) {
   // TODO: LINUXism
   long cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
   // TODO: get rid of upper limit
+  // TODO: is assert OK here?
   assert(cpu_count > 0 && cpu_count < 1024);
   thread_count = ((unsigned int)cpu_count) - 1 + NUM_OF_WORKERS;
 
@@ -64,7 +65,6 @@ bool init_threads(int sock_fd) {
     return false;
   }
 
-  thrd_data->sock_fd = sock_fd;
   for (int i = 0; i < thread_count; i++) {
     if (pthread_create(thread_ids + i, NULL, &server_thrd_start, &thrd_data) !=
         0) {
@@ -73,7 +73,41 @@ bool init_threads(int sock_fd) {
     }
   }
 
-  server_thrd_start(&thrd_data);
+  bool result = conn_arbiter(sock_fd, thread_ids, thrd_data, thread_count);
+  // FIXME: end and clean up the threads
+  free(thrd_data);
+  free(thread_ids);
+  return result;
+}
+
+bool conn_arbiter(int sock_fd, pthread_t *thread_ids, ThrdData *thrd_data,
+                  size_t thrd_data_len) {
+  // TODO: for now I don't think we need the client address
+  int result = 0;
+
+  while (!shutdown) {
+    result = accept(sock_fd, NULL, NULL);
+    // TODO: should this be here?
+    assert(result == -1 || result >= 0);
+    if (result >= 0) {
+      
+    } else {
+      switch (errno) {
+      case ECONNABORTED:
+        puts("INFO: Accept connection aborted");
+        break;
+
+      case EMFILE || ENFILE || ENOBUFS || ENOMEM:
+        puts("WARN: Not enough resources to accept connection, dropping...");
+        break;
+
+      default:
+        perror("accept");
+        return false;
+        break;
+      }
+    }
+  }
 }
 
 void *server_thrd_start(const ThrdData *data) {
@@ -107,7 +141,8 @@ void *server_thrd_start(const ThrdData *data) {
   const struct epoll_event *event_queue = NULL;
   int epoll_status = 0;
   while (!shutdown) {
-    epoll_status = epoll_wait(epoll_fd, &event_queue, EPOLL_MAX_EVENTS, EPOLL_TIMEOUT);
+    epoll_status =
+        epoll_wait(epoll_fd, &event_queue, EPOLL_MAX_EVENTS, EPOLL_TIMEOUT);
     // TODO: should this be here?
     assert(epoll_status == -1 || epoll_status >= 0);
     if (epoll_status == -1) {
@@ -116,15 +151,15 @@ void *server_thrd_start(const ThrdData *data) {
       }
     } else if (epoll_status > 0) {
       for (int i = 0; i < epoll_status; i++) {
-        ConnState *state = (ConnState *) event_queue[i].data.ptr;
+        ConnState *state = (ConnState *)event_queue[i].data.ptr;
         if (state->fd == data->sock_fd) {
 
         } else {
-
         }
       }
     } else {
-      // TODO: check worker threads? What are we doing when no new connection arrives?
+      // TODO: check worker threads? What are we doing when no new connection
+      // arrives?
     }
 
     if (epoll_wait != 1) {

@@ -216,8 +216,7 @@ int get_bound_sock(unsigned short int portnum, uint32_t ip_address) {
   sock_addr.sin_family = AF_INET;
   sock_addr.sin_port = htons(portnum);
   sock_addr.sin_addr.s_addr = htonl(ip_address);
-  // non-blocking socket for epoll?
-  sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 6);
+  sfd = socket(AF_INET, SOCK_STREAM, 6);
 
   if (sfd >= 0) {
     if (bind(sfd, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) != 0) {
