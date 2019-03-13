@@ -6,7 +6,8 @@
 #include <string.h>
 #include <sys/types.h>
 
-typedef struct StrBuf {
+__attribute__((designated_init)) typedef struct StrBuf
+{
   char *ptr;
   size_t size;
   size_t len;

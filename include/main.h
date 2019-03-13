@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
+#include <stdatomic.h>
 
 #define send_status(NUM, MSG) ftp_sendline(sock_fd, #NUM MSG)
 

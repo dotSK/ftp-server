@@ -25,7 +25,8 @@
 			"ftp_functions.h": "c",
 			"str_buf.h": "c",
 			"main.h": "c",
-			"assert.h": "c"
+			"assert.h": "c",
+			"stdatomic.h": "c"
 		},
 		"C_Cpp.default.cStandard": "c11",
 		"C_Cpp.default.intelliSenseMode": "gcc-x64",
