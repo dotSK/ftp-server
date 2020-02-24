@@ -1,0 +1,8 @@
+BasedOnStyle: LLVM
+AllowShortIfStatementsOnASingleLine: false
+IndentWidth: 4
+IndentCaseLabels: true
+AlignTrailingComments: true
+PointerBindsToType: false
+AllowShortFunctionsOnASingleLine: false
+BinPackParameters: true

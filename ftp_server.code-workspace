@@ -26,7 +26,8 @@
 			"str_buf.h": "c",
 			"main.h": "c",
 			"assert.h": "c",
-			"stdatomic.h": "c"
+			"stdatomic.h": "c",
+			"stddef.h": "c"
 		},
 		"C_Cpp.default.cStandard": "c11",
 		"C_Cpp.default.intelliSenseMode": "gcc-x64",

@@ -10,11 +10,11 @@
  *
  * no null check
  */
-bool save_new_path(const StrBuf *restrict new_path,
-                   const StrBuf *restrict curr_rel_path) {
+bool save_new_path(const StrBuf_t *restrict new_path,
+                   const StrBuf_t *restrict curr_rel_path) {
   size_t rel_segment_size = new_path->len - cwd.len + 1;
 
-  if (strbuf_change_size(curr_rel_path, rel_segment_size)) {
+  if (StrBuf_changeSize(curr_rel_path, rel_segment_size)) {
     memcpy(curr_rel_path->ptr, new_path->ptr + cwd.len, rel_segment_size);
     return true;
   } else {
@@ -25,21 +25,21 @@ bool save_new_path(const StrBuf *restrict new_path,
 /**
  * Checks if path is confined to a given starting folder.
  *
- * @return *ptr StrBuf struct if path is valid
+ * @return *ptr StrBuf_t struct if path is valid
  * @return NULL if path is invalid or there was an allocation error
  *
  * no null check
  */
-StrBuf *validate_path(const StrBuf *restrict new_path,
-                      const StrBuf *restrict curr_path,
-                      StrBuf *restrict path_buf) {
+StrBuf_t *validate_path(const StrBuf_t *restrict new_path,
+                      const StrBuf_t *restrict curr_path,
+                      StrBuf_t *restrict path_buf) {
   size_t desired_size = 0;
   char *canonical_path = NULL;
-  StrBuf *path_wrapper = NULL;
+  StrBuf_t *path_wrapper = NULL;
 
   if (new_path->len > 0 && new_path->ptr[0] == '/') {
     desired_size = cwd.len + new_path->len + 1;
-    if (strbuf_change_size(path_buf, desired_size)) {
+    if (StrBuf_changeSize(path_buf, desired_size)) {
       memcpy(path_buf->ptr, cwd.ptr, cwd.len);
       memcpy(path_buf->ptr + cwd.len, new_path->ptr, new_path->len + 1);
     } else {
@@ -47,7 +47,7 @@ StrBuf *validate_path(const StrBuf *restrict new_path,
     }
   } else {
     desired_size = cwd.len + curr_path->len + new_path->len + 1;
-    if (strbuf_change_size(path_buf, desired_size)) {
+    if (StrBuf_changeSize(path_buf, desired_size)) {
       memcpy(path_buf->ptr, cwd.ptr, cwd.len);
       memcpy(path_buf->ptr + cwd.len, curr_path->ptr, curr_path->len);
       memcpy(path_buf->ptr + cwd.len + curr_path->len, new_path->ptr,
